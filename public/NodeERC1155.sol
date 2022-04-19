@@ -1455,6 +1455,7 @@ contract NodeERC1155 is INodeERC1155, ERC1155, Ownable, ReentrancyGuard {
         uint256 snowballAt;
         uint256 claimedAmount;
         uint256 claimedSnowball; // only need to get total claimed amount in frontend.
+        uint256 remainClaimedAmount;
         string uri;
     }
 
@@ -1598,67 +1599,66 @@ contract NodeERC1155 is INodeERC1155, ERC1155, Ownable, ReentrancyGuard {
     }
 
     function bailOutMint(
-        uint256 _nodeType,
-        uint256[] memory useNodes,
+        uint256 id, // node used in bailout mint
+        uint256 nodeType,
+        uint256 amount, // bailout mint amount
         string calldata _uri
     ) public {
-        uint256 claimableCorkByNodes;
-        for (uint256 i = 0; i < useNodes.length; i++) {
-            require(
-                nodeState[useNodes[i]].purchaser == msg.sender,
-                "only node owner can use it"
-            );
-            claimableCorkByNodes += getClaimableCorkById(useNodes[i]);
-        }
+        require(
+            nodeState[id].purchaser == msg.sender,
+            "only node owner can use it"
+        );
+        uint256 claimableCork = getClaimableCorkById(id);
+        uint256 wastedCork = collection[nodeType].price * amount;
 
         require(
-            claimableCorkByNodes >= collection[_nodeType].price,
+            claimableCork >= wastedCork,
             "claimable cork is less than price"
         );
 
         require(
-            collection[_nodeType].currentSupply <=
-                collection[_nodeType].maxSupply,
+            collection[nodeType].currentSupply <=
+                collection[nodeType].maxSupply,
             "all of this collection are purchased"
         );
 
         require(
-            getOwnedNodeCountByType(msg.sender, _nodeType) <
-                collection[_nodeType].purchaseLimit,
+            getOwnedNodeCountByType(msg.sender, nodeType) <
+                collection[nodeType].purchaseLimit,
             "minted nodes exceed amount limit"
         );
 
-        // ICorkToken corkToken = ICorkToken(corkAddress);
-
-        for (uint256 i = 0; i < useNodes.length; i++) {
-            (
-                uint256 mainRewardCork,
-                uint256 snowballRewardCork
-            ) = calculateClaimableAmount(useNodes[i]);
-            nodeState[useNodes[i]].snowballAt = block.timestamp;
-            nodeState[useNodes[i]].claimedSnowball += snowballRewardCork;
-            nodeState[useNodes[i]].claimedAmount = mainRewardCork;
+        (, uint256 snowballRewardCork) = calculateClaimableAmount(id);
+        nodeState[id].snowballAt = block.timestamp;
+        if (wastedCork <= snowballRewardCork) {
+            if (wastedCork < snowballRewardCork)
+                nodeState[id].remainClaimedAmount =
+                    snowballRewardCork -
+                    wastedCork;
+        } else {
+            nodeState[id].claimedAmount = wastedCork - snowballRewardCork;
         }
+        nodeState[id].claimedSnowball += snowballRewardCork;
 
-        uint256 _id = _getNextTokenID();
-        _incrementTokenID();
-        nodeState[_id].purchaser = msg.sender;
-        nodeState[_id].nodeType = _nodeType;
-        nodeState[_id].purchasedAt = block.timestamp;
-        nodeState[_id].snowballAt = block.timestamp;
-        nodeState[_id].uri = _uri;
+        for (uint256 i = 0; i < amount; i++) {
+            uint256 _id = _getNextTokenID();
+            _incrementTokenID();
+            nodeState[_id].purchaser = msg.sender;
+            nodeState[_id].nodeType = nodeType;
+            nodeState[_id].purchasedAt = block.timestamp;
+            nodeState[_id].snowballAt = block.timestamp;
+            nodeState[_id].uri = _uri;
 
-        collection[_nodeType].currentSupply++;
+            collection[nodeType].currentSupply++;
 
-        // corkToken.mint(address(this), claimableCorkByNodes);
+            if (bytes(_uri).length > 0) {
+                emit URI(_uri, _id);
+            }
 
-        if (bytes(_uri).length > 0) {
-            emit URI(_uri, _id);
+            _mint(msg.sender, nodeType, 1, "");
+
+            ownedNodes[msg.sender].push(_id);
         }
-
-        _mint(msg.sender, _nodeType, 1, "");
-
-        ownedNodes[msg.sender].push(_id);
     }
 
     function claim() external payable nonReentrant {
@@ -1678,10 +1678,16 @@ contract NodeERC1155 is INodeERC1155, ERC1155, Ownable, ReentrancyGuard {
             ) = calculateClaimableAmount(id);
             nodeState[id].snowballAt = block.timestamp;
             nodeState[id].claimedSnowball += snowballRewardCork;
-            claimableCork += (snowballRewardCork +
-                mainRewardCork -
-                nodeState[id].claimedAmount);
-            nodeState[id].claimedAmount = mainRewardCork;
+            claimableCork +=
+                (snowballRewardCork +
+                    mainRewardCork -
+                    nodeState[id].claimedAmount) +
+                nodeState[id].remainClaimedAmount;
+            if (nodeState[id].remainClaimedAmount > 0)
+                nodeState[id].remainClaimedAmount = 0;
+            nodeState[id].claimedAmount =
+                mainRewardCork +
+                nodeState[id].remainClaimedAmount;
         }
 
         corkToken.transfer(msg.sender, claimableCork);
@@ -1703,8 +1709,12 @@ contract NodeERC1155 is INodeERC1155, ERC1155, Ownable, ReentrancyGuard {
         nodeState[id].claimedSnowball += snowballRewardCork;
         uint256 claimableCork = (snowballRewardCork +
             mainRewardCork -
-            nodeState[id].claimedAmount);
-        nodeState[id].claimedAmount = mainRewardCork;
+            nodeState[id].claimedAmount) + nodeState[id].remainClaimedAmount;
+        if (nodeState[id].remainClaimedAmount > 0)
+            nodeState[id].remainClaimedAmount = 0;
+        nodeState[id].claimedAmount =
+            mainRewardCork +
+            nodeState[id].remainClaimedAmount;
 
         corkToken.transfer(msg.sender, claimableCork);
     }
@@ -1731,9 +1741,11 @@ contract NodeERC1155 is INodeERC1155, ERC1155, Ownable, ReentrancyGuard {
                 uint256 mainRewardCork,
                 uint256 snowballRewardCork
             ) = calculateClaimableAmount(id);
-            claimableCork += (snowballRewardCork +
-                mainRewardCork -
-                nodeState[id].claimedAmount);
+            claimableCork +=
+                (snowballRewardCork +
+                    mainRewardCork -
+                    nodeState[id].claimedAmount) +
+                nodeState[id].remainClaimedAmount;
         }
         return claimableCork;
     }
@@ -1865,7 +1877,7 @@ contract NodeERC1155 is INodeERC1155, ERC1155, Ownable, ReentrancyGuard {
         ) = calculateClaimableAmount(id);
         uint256 claimableCork = (snowballRewardCork +
             mainRewardCork -
-            nodeState[id].claimedAmount);
+            nodeState[id].claimedAmount) + nodeState[id].remainClaimedAmount;
         return claimableCork;
     }
 

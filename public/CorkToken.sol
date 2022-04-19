@@ -81,7 +81,7 @@ interface IERC20 {
     event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
-// 
+// SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts v4.4.1 (token/ERC20/extensions/IERC20Metadata.sol)
 /**
  * @dev Interface for the optional metadata functions from the ERC20 standard.
@@ -105,7 +105,7 @@ interface IERC20Metadata is IERC20 {
     function decimals() external view returns (uint8);
 }
 
-// 
+// SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts v4.4.1 (utils/Context.sol)
 /**
  * @dev Provides information about the current execution context, including the
@@ -127,7 +127,7 @@ abstract contract Context {
     }
 }
 
-// 
+// SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts v4.4.1 (token/ERC20/ERC20.sol)
 /**
  * @dev Implementation of the {IERC20} interface.
@@ -477,7 +477,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
     ) internal virtual {}
 }
 
-// 
+// SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts v4.4.1 (access/Ownable.sol)
 /**
  * @dev Contract module which provides a basic access control mechanism, where
@@ -549,7 +549,7 @@ abstract contract Ownable is Context {
     }
 }
 
-// 
+// SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts v4.4.1 (utils/math/SafeMath.sol)
 // CAUTION
 // This version of SafeMath should only be used with Solidity 0.8 or later,
@@ -773,7 +773,7 @@ library SafeMath {
     }
 }
 
-// 
+// SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.5.0) (token/ERC20/IERC20.sol)
 /**
  * @dev Interface of the ERC20 standard as defined in the EIP.
@@ -796,14 +796,14 @@ interface ICorkToken {
     function setApprove(address owner, address spender, uint256 amount) external;
 }
 
-//  LICENSE
+// SPDX-License-Identifier: MIT LICENSE
 interface ISwapCork {
     function swapCorkForAVAX(address from, uint256 amount) external;
     function getSwapAvailable() external view returns(bool);
     function removeSwapAvailable() external;
 }
 
-// 
+// SPDX-License-Identifier: MIT
 contract CorkToken is ICorkToken, ERC20, Ownable {
     using SafeMath for uint256;
 
